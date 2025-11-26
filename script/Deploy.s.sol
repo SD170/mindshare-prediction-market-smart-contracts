@@ -14,26 +14,48 @@ contract Deploy is Script {
         address deployer = vm.addr(pk);
         vm.startBroadcast(pk);
 
-        // 1) Deploy mock stake token (replace with USDC test token if you prefer)
-        StakeToken stake = new StakeToken();
+        // 1) Use existing stake token if provided, otherwise deploy new one
+        address stakeAddress;
+        try vm.envAddress("STAKE_TOKEN_ADDRESS") returns (address existingToken) {
+            stakeAddress = existingToken;
+            console.log("Using existing StakeToken:", stakeAddress);
+        } catch {
+            // Deploy new token if STAKE_TOKEN_ADDRESS not set
+            StakeToken stake = new StakeToken();
+            stakeAddress = address(stake);
+            console.log("Deployed new StakeToken:", stakeAddress);
+        }
 
         // 2) Deploy oracle with signer == deployer for MVP; update later
         SettlementOracle oracle = new SettlementOracle(deployer);
 
         // 3) Deploy market implementation and factory
         ParimutuelMarket impl = new ParimutuelMarket();
-        MarketFactory factory = new MarketFactory(address(impl), address(stake), address(oracle), deployer);
+        MarketFactory factory = new MarketFactory(address(impl), stakeAddress, address(oracle), deployer);
 
         vm.stopBroadcast();
 
-        // Log deployed addresses (can be saved manually or via broadcast artifacts)
+        // Log deployed addresses
         console.log("\n=== Deployment Addresses ===");
         console.log("SettlementOracle:", address(oracle));
         console.log("MarketFactory:", address(factory));
-        console.log("StakeToken:", address(stake));
+        console.log("StakeToken:", stakeAddress);
         console.log("Implementation:", address(impl));
         console.log("Deployer:", deployer);
         console.log("Signer:", deployer);
-        console.log("\nCopy these addresses to oracle/config/contracts.json");
+        
+        // Output JSON for API
+        console.log("\n=== Contracts JSON (for API) ===");
+        console.log("{");
+        console.log('  "contracts": [');
+        console.log('    {"type": "settlementOracle", "address": "', address(oracle), '"},');
+        console.log('    {"type": "marketFactory", "address": "', address(factory), '"},');
+        console.log('    {"type": "stakeToken", "address": "', stakeAddress, '"},');
+        console.log('    {"type": "implementation", "address": "', address(impl), '"}');
+        console.log("  ]");
+        console.log("}");
+        
+        console.log("\nTo reuse this token in future deployments, set:");
+        console.log("export STAKE_TOKEN_ADDRESS=", stakeAddress);
     }
 }

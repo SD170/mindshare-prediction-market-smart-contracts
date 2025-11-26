@@ -12,5 +12,6 @@ evmasm_version = 'paris'
 optimizer = true
 optimizer_runs = 200
 via_ir = true
+fs_permissions = [{ access = "read", path = "./markets-config.json" }]
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

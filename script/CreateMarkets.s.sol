@@ -22,27 +22,36 @@ contract CreateMarkets is Script {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address factoryAddress = vm.envAddress("FACTORY_ADDRESS");
         
+        // Read market config from JSON file or environment variable
+        string memory configJson;
+        try vm.envString("MARKETS_CONFIG_JSON") returns (string memory envJson) {
+            configJson = envJson;
+        } catch {
+            // Fallback to reading from file
+            string memory configPath = vm.envOr("MARKETS_CONFIG_PATH", string("markets-config.json"));
+            configJson = vm.readFile(configPath);
+        }
+        
         vm.startBroadcast(pk);
         
         MarketFactory factory = MarketFactory(factoryAddress);
         
         // Get current timestamp and set times
         uint64 baseTime = uint64(block.timestamp);
-        uint64 lockTime = baseTime + 5 minutes; // Lock in 5 minutes (for testing)
-        uint64 resolveTime = lockTime + 15 minutes; // Resolve 15 min after lock
+        uint64 lockTime = baseTime + 5 minutes; // Lock in 5 minutes
+        uint64 resolveTime = lockTime + 10 seconds; // Resolve 10 seconds after lock
         
-        // Create 5 Top-10 markets
-        string[5] memory top10Projects = ["Ethereum", "Uniswap", "Aave", "Chainlink", "Polygon"];
-        
-        console.log("\n=== All 10 markets created successfully! ===");
         console.log("\n=== Market Configuration (JSON) ===");
-        console.log("Copy the JSON below and import via backend API /api/admin/markets/import");
         console.log("[");
         
-        // Create and output Top-10 markets
-        for (uint i = 0; i < top10Projects.length; i++) {
+        // Parse and create Top-10 markets
+        uint256 top10Count = configJson.readUint(".top10Count");
+        
+        for (uint i = 0; i < top10Count; i++) {
+            string memory projectName = configJson.readString(string.concat(".top10[", vm.toString(i), "].projectName"));
+            
             bytes32 questionHash = keccak256(
-                abi.encodePacked("TOP10:", top10Projects[i], ":", vm.toString(lockTime))
+                abi.encodePacked("TOP10:", projectName, ":", vm.toString(lockTime))
             );
             
             (address market, bytes32 marketId) = factory.createMarket(
@@ -53,7 +62,7 @@ contract CreateMarkets is Script {
             
             console.log("  {");
             console.log("    \"type\": \"top10\",");
-            console.log("    \"projectName\": \"%s\",", top10Projects[i]);
+            console.log("    \"projectName\": \"%s\",", projectName);
             console.log("    \"lockTime\": %d,", lockTime);
             console.log("    \"resolveTime\": %d,", resolveTime);
             console.log("    \"questionHash\": \"%s\",", vm.toString(questionHash));
@@ -62,14 +71,15 @@ contract CreateMarkets is Script {
             console.log("  },");
         }
         
-        // Create 5 Head-to-Head markets
-        string[5] memory h2hProjectA = ["Ethereum", "Uniswap", "Arbitrum", "Base", "Solana"];
-        string[5] memory h2hProjectB = ["Bitcoin", "Aave", "Optimism", "Polygon", "Avalanche"];
+        // Parse and create H2H markets
+        uint256 h2hCount = configJson.readUint(".h2hCount");
         
-        // Create and output H2H markets
-        for (uint i = 0; i < h2hProjectA.length; i++) {
+        for (uint i = 0; i < h2hCount; i++) {
+            string memory projectA = configJson.readString(string.concat(".h2h[", vm.toString(i), "].projectA"));
+            string memory projectB = configJson.readString(string.concat(".h2h[", vm.toString(i), "].projectB"));
+            
             bytes32 questionHash = keccak256(
-                abi.encodePacked("H2H:", h2hProjectA[i], ":", h2hProjectB[i], ":", vm.toString(lockTime))
+                abi.encodePacked("H2H:", projectA, ":", projectB, ":", vm.toString(lockTime))
             );
             
             (address market, bytes32 marketId) = factory.createMarket(
@@ -80,14 +90,14 @@ contract CreateMarkets is Script {
             
             console.log("  {");
             console.log("    \"type\": \"h2h\",");
-            console.log("    \"projectA\": \"%s\",", h2hProjectA[i]);
-            console.log("    \"projectB\": \"%s\",", h2hProjectB[i]);
+            console.log("    \"projectA\": \"%s\",", projectA);
+            console.log("    \"projectB\": \"%s\",", projectB);
             console.log("    \"lockTime\": %d,", lockTime);
             console.log("    \"resolveTime\": %d,", resolveTime);
             console.log("    \"questionHash\": \"%s\",", vm.toString(questionHash));
             console.log("    \"marketId\": \"%s\",", vm.toString(marketId));
             console.log("    \"marketAddress\": \"%s\"", market);
-            if (i < h2hProjectA.length - 1) {
+            if (i < h2hCount - 1) {
                 console.log("  },");
             } else {
                 console.log("  }");
@@ -95,6 +105,7 @@ contract CreateMarkets is Script {
         }
         
         console.log("]");
+        console.log("\n=== All markets created successfully! ===");
         
         vm.stopBroadcast();
     }
